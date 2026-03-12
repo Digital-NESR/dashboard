@@ -1,4 +1,4 @@
-//import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 
 const REPORT_DATE = "March 12, 2026";
 const DAY_NUMBER = 13;
