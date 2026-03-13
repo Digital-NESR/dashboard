@@ -18,12 +18,11 @@ function App() {
         boxSizing: 'border-box',
       }}>
         <iframe
-          src="https://claude.site/public/artifacts/0d95f19b-cca4-481b-8e3c-10450fa8e012/embed"
-          title="Claude Artifact"
+          src="https://scs.lognai.com"
+          title="SCS LognAI"
           width="100%"
-          height="600"
+          height="800"
           frameBorder="0"
-          allow="clipboard-write"
           allowFullScreen
           style={{ borderRadius: 10, border: '1px solid #E2E8F0' }}
         />
