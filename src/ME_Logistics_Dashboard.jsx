@@ -1,238 +1,270 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
-const REPORT_DATE = "March 12, 2026";
-const DAY_NUMBER = 13;
-
-const STATUS = {
-  CLOSED: { label: "CLOSED", bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", dot: "#EF4444" },
-  SUSPENDED: { label: "SUSPENDED", bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", dot: "#EF4444" },
-  LIMITED: { label: "LIMITED", bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", dot: "#F59E0B" },
-  RESTRICTED: { label: "RESTRICTED", bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", dot: "#F59E0B" },
-  PARTIAL: { label: "PARTIAL", bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", dot: "#F59E0B" },
-  OPERATIONAL: { label: "OPERATIONAL", bg: "#F0FDF4", border: "#BBF7D0", text: "#166534", dot: "#22C55E" },
-  HALTED: { label: "HALTED", bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", dot: "#EF4444" },
+// ============ INITIAL DATA (March 13, 2026 — Day 14) ============
+const INIT = {
+  reportDate: "March 13, 2026",
+  dayNumber: 14,
+  lastRefresh: new Date().toISOString(),
+  kpis: [
+    { label: "Strait of Hormuz", value: "CLOSED", sub: "Day 12 · 16+ vessels attacked · New Supreme Leader vows it stays closed · US escorts may start end of March", color: "#DC2626", accent: "#FEF2F2" },
+    { label: "Iraq Oil Ports", value: "HALTED", sub: "2 tankers attacked by drone boats near Basra · 1 killed · All oil port ops suspended", color: "#DC2626", accent: "#FEF2F2" },
+    { label: "Brent Crude", value: ">$100/bbl", sub: "IEA: 'Largest supply disruption in history' · 8M bbl/day loss · Iran warns $200/bbl", color: "#DC2626", accent: "#FEF2F2" },
+    { label: "Salalah Port (Oman)", value: "SUSPENDED", sub: "Drone strikes on fuel tanks · Staff evacuated · Maersk halted ops · Key alternative lost", color: "#DC2626", accent: "#FEF2F2" },
+    { label: "Airspace Closures", value: "6 NATIONS", sub: "Iran · Iraq · Bahrain · Kuwait · Syria · Israel(PPR) · Kuwait airport hit AGAIN Mar 13", color: "#DC2626", accent: "#FEF2F2" },
+    { label: "IEA Emergency Release", value: "400M bbl", sub: "Largest ever · US SPR 172M · Failing to cap prices · Only buys weeks", color: "#D97706", accent: "#FFFBEB" },
+    { label: "Qatar Airways", value: "15 ROUTES", sub: "Limited flights Mar 13: LHR, JFK, FRA, BOM, DEL + 10 more · Scheduled ops still suspended", color: "#D97706", accent: "#FFFBEB" },
+    { label: "Road Freight (GCC)", value: "DEGRADING", sub: "Fujairah critical corridor · Kuwait 6 power lines lost · Oman corridor severely compromised", color: "#D97706", accent: "#FFFBEB" },
+  ],
+  situationBlocks: [
+    { border: "#DC2626", bg: "#FEF2F2", label: "OCEAN FREIGHT", labelColor: "#991B1B", text: "Hormuz CLOSED Day 12. New Supreme Leader Khamenei vows it stays closed. 16+ vessels attacked (NYT investigation: 8 seafarers killed, 1 missing). 6 ships hit in 48 hours. Iraqi drone boats attacked 2 tankers (Safesea Vishnu, Zefyros) near Basra — 1 Indian crew killed, fires burning, up to 400K bbl on fire. Iraq ALL oil ports halted. Salalah port SUSPENDED — fuel tanks hit, staff evacuated. Oman evacuating vessels from Mina Al Fahal (~1M bbl/day). Container ship struck 35nm north of Jebel Ali. Hapag-Lloyd vessel caught fire from shrapnel. Iran restarting exports via Jask terminal. Shadow fleet active." },
+    { border: "#D97706", bg: "#FFFBEB", label: "AIR FREIGHT", labelColor: "#92400E", text: "Iran, Iraq, Bahrain, Kuwait, Syria CLOSED. UAE/Qatar LIMITED under ESCAT. Kuwait airport hit by drones AGAIN Mar 13 (2nd time in 6 days). 6 electricity lines knocked out by drone debris. Drone hit building near Dubai Creek Harbour. Qatar Airways operating limited flights Mar 13 to 15 destinations (LHR, JFK, FRA, BOM, DEL, ISB, etc). Emirates serving 84 destinations. Bahrain airport fuel tanks targeted. Air India imposed fuel surcharge. South Korea fuel price cap (first since 1997)." },
+    { border: "#16A34A", bg: "#F0FDF4", label: "ROAD TRANSPORT", labelColor: "#166534", text: "Most resilient mode but DEGRADING. Fujairah/Khor Fakkan → Jebel Ali now the LAST MAJOR functioning alternative corridor. Kuwait infrastructure under drone pressure (6 power lines lost). Oman corridor severely compromised (Salalah suspended, Mina Al Fahal evacuation). Corporate evacuations (Citi, PwC) continuing. Iraq commercial ports still working but oil ports halted." },
+    { border: "#7C3AED", bg: "#F5F3FF", label: "ENERGY & DIPLOMACY", labelColor: "#5B21B6", text: "IEA: 'Largest supply disruption in history' — 8M bbl/day loss. Brent >$100/bbl. Omani crude ~$132/bbl. Iran warns $200/bbl. IEA 400M bbl release underway but failing to cap prices. Trump authorized buying Russian stranded oil. Iran's Pezeshkian sets 3 peace conditions: rights recognition, reparations, guarantees. UNHCR: 3.2M displaced in Iran. 820K+ in Lebanon. US escorts may start end of March." },
+  ],
+  ports: [
+    { country: "UAE", port: "Jebel Ali (T1–T4)", status: "OPERATIONAL", note: "Enhanced security. Container ship struck 35nm north Mar 12. Drone near Creek Harbour. Citi/PwC evacuated." },
+    { country: "UAE", port: "Fujairah / Khor Fakkan", status: "OPERATIONAL", note: "KEY ALTERNATIVE HUB. GPS spoofing offshore. Temp customs facilitation for road transfer." },
+    { country: "UAE", port: "Sharjah / Hamriyah", status: "OPERATIONAL", note: "Running smoothly (GAC, Inchcape)." },
+    { country: "Oman", port: "Sohar", status: "OPERATIONAL", note: "Outside Hormuz. Operational. Growing threat environment." },
+    { country: "Oman", port: "Salalah", status: "SUSPENDED", note: "Drones struck fuel tanks. Staff evacuated. Maersk + Inchcape confirm suspended." },
+    { country: "Oman", port: "Duqm", status: "OPERATIONAL", note: "Working normally (Inchcape). Previously struck but recovered." },
+    { country: "Oman", port: "Mina Al Fahal", status: "RESTRICTED", note: "~1M bbl/day exports. Precautionary vessel evacuation. Omani crude ~$132/bbl." },
+    { country: "Saudi", port: "Eastern Province", status: "RESTRICTED", note: "Domestic calls only. 12 drones intercepted Mar 13 incl. Shaybah (1M bbl/day)." },
+    { country: "Saudi", port: "Jeddah / Yanbu", status: "OPERATIONAL", note: "Red Sea coast. Accepting diverted bookings." },
+    { country: "Qatar", port: "Hamad Port", status: "RESTRICTED", note: "Missile attacks intercepted. Ukrainian anti-drone teams. 4 arrested for IRGC spying." },
+    { country: "Bahrain", port: "KBSP", status: "SUSPENDED", note: "Not operating. Fuel tanks targeted Mar 13. Desalination plant damaged." },
+    { country: "Kuwait", port: "Shuwaikh/Shuaiba", status: "OPERATIONAL", note: "Security Level 2. 6 electricity lines lost to drone debris. Airport hit again." },
+    { country: "Iraq", port: "Basra Oil Terminal", status: "HALTED", note: "ALL oil port ops halted. Safesea Vishnu & Zefyros attacked. 1 killed. Commercial ports working." },
+    { country: "Jordan", port: "Aqaba", status: "OPERATIONAL", note: "All ops normal. ISPS Level 1. Jordan stable." },
+    { country: "Egypt", port: "Suez Canal", status: "OPERATIONAL", note: "ISPS Level 1. Minimal traffic — carrier self-diversion." },
+  ],
+  airspace: [
+    { country: "Iran (OIIX)", status: "CLOSED", note: "Internet blackout Day 14 (290+ hrs). Drone strikes on IRGC checkpoints in Tehran." },
+    { country: "Iraq (ORBB)", status: "CLOSED", note: "Total closure. Iran-backed militia explosions in Erbil." },
+    { country: "Bahrain (OBBB)", status: "CLOSED", note: "Fuel tanks targeted. Water desalination plant damaged." },
+    { country: "Kuwait (OKAC)", status: "CLOSED", note: "Airport hit AGAIN Mar 13. 6 power lines lost. 2 injured." },
+    { country: "Syria (OSTT)", status: "CLOSED", note: "Israel expanding Lebanon operations. 820K+ displaced." },
+    { country: "Israel (LLLL)", status: "LIMITED", note: "PPR. Iran-Hezbollah joint op hit 50+ targets." },
+    { country: "UAE (OMAE)", status: "LIMITED", note: "ESCAT. Drone near Creek Harbour. DXB operating. Emirates 84 destinations." },
+    { country: "Qatar (OTDF)", status: "LIMITED", note: "ESCAT. QA 15 destinations Mar 13. 29 flights authorized." },
+    { country: "Saudi (OEJD)", status: "PARTIAL", note: "12 drones intercepted. Shaybah targeted. Dammam intl flights delayed." },
+    { country: "Oman (OOMM)", status: "OPERATIONAL", note: "Open. Key corridor. But Salalah/Mina Al Fahal under pressure." },
+    { country: "Jordan (OJAC)", status: "PARTIAL", note: "Open with night closure 18:00-09:00." },
+  ],
+  roads: [
+    { route: "UAE Internal", status: "OPERATIONAL", note: "Uninterrupted. Drone near Creek Harbour. Corporate evacuations." },
+    { route: "UAE–Oman (Fujairah→Jebel Ali)", status: "OPERATIONAL", note: "CRITICAL — now the LAST MAJOR functioning alternative corridor." },
+    { route: "Saudi Arabia–UAE", status: "OPERATIONAL", note: "Borders functioning. Kuwait Airways routing via Jeddah." },
+    { route: "Saudi–Jordan", status: "OPERATIONAL", note: "Jordan stable. Aqaba operational." },
+    { route: "Kuwait Internal", status: "RESTRICTED", note: "6 power lines lost. Airport hit again. Growing infra risk." },
+    { route: "Iraq South", status: "LIMITED", note: "Oil ports HALTED. Commercial ports working. Militia active." },
+    { route: "Oman (Sohar–Salalah)", status: "RESTRICTED", note: "SEVERELY DEGRADED. Salalah suspended. Mina Al Fahal evacuation." },
+  ],
+  carriers: [
+    { name: "Maersk", action: "Hormuz & Red Sea suspended. Salalah port halted. EFI active." },
+    { name: "MSC", action: "ALL ME bookings suspended. 15 vessels (109K TEU) trapped." },
+    { name: "CMA CGM", action: "Sheltering. ECS $2K-$4K. 14 vessels (70K TEU) trapped." },
+    { name: "Hapag-Lloyd", action: "WRS $1,500/TEU. Vessel caught fire from shrapnel overnight Mar 12." },
+    { name: "ONE", action: "ONE Majesty stern damage. Bookings suspended." },
+  ],
 };
 
-const StatusBadge = ({ status }) => {
-  const s = STATUS[status] || STATUS.CLOSED;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 4, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", fontFamily: "'IBM Plex Mono', monospace", background: s.bg, border: `1px solid ${s.border}`, color: s.text }}>
-      <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.dot, boxShadow: `0 0 4px ${s.dot}50` }} />
-      {s.label}
-    </span>
-  );
+// ============ STATUS BADGE ============
+const ST = {
+  CLOSED: { bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", dot: "#EF4444" },
+  SUSPENDED: { bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", dot: "#EF4444" },
+  HALTED: { bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", dot: "#EF4444" },
+  LIMITED: { bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", dot: "#F59E0B" },
+  RESTRICTED: { bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", dot: "#F59E0B" },
+  PARTIAL: { bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", dot: "#F59E0B" },
+  DEGRADING: { bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", dot: "#F59E0B" },
+  OPERATIONAL: { bg: "#F0FDF4", border: "#BBF7D0", text: "#166534", dot: "#22C55E" },
 };
+const Badge = ({ status }) => { const s = ST[status] || ST.CLOSED; return (<span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 4, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", fontFamily: "'IBM Plex Mono', monospace", background: s.bg, border: `1px solid ${s.border}`, color: s.text }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: s.dot, boxShadow: `0 0 4px ${s.dot}50` }} />{status}</span>); };
 
-const PulseDot = ({ color }) => (
-  <span style={{ position: "relative", display: "inline-block", width: 8, height: 8, marginRight: 6 }}>
-    <span style={{ position: "absolute", inset: -3, borderRadius: "50%", background: color, opacity: 0.25, animation: "pulse 2s ease-in-out infinite" }} />
-    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: color }} />
-  </span>
-);
+// ============ AUTO-REFRESH PROMPT ============
+const REFRESH_PROMPT = `You are a logistics intelligence analyst. Search for the LATEST information about the Middle East conflict's impact on logistics as of today. Search for:
+1. Strait of Hormuz shipping status and vessel attacks
+2. Gulf port operations (Jebel Ali, Salalah, Basra, Kuwait, Bahrain, Fujairah)
+3. Middle East airspace closures and airline updates
+4. Oil prices (Brent crude) and energy market developments
+5. Road freight and land transport disruptions in GCC
+ 
+Return ONLY a JSON object (no markdown, no backticks) with this exact structure:
+{"reportDate":"<today's date>","dayNumber":<conflict day number>,"summary":"<2-3 sentence overall summary of key changes>","hormuzStatus":"<current status>","oilPrice":"<current Brent price>","newDevelopments":["<development 1>","<development 2>","<development 3>","<development 4>","<development 5>"],"portChanges":["<any port status changes>"],"airspaceChanges":["<any airspace changes>"],"vesselCount":"<total vessels attacked>","iaStatus":"<Iraq ports status>","salalahStatus":"<Salalah port status>"}`;
 
-// ===== UPDATED DATA FOR MARCH 12 =====
-const maritimePorts = [
-  { country: "UAE", port: "Jebel Ali (T1–T4)", status: "OPERATIONAL", note: "Enhanced security. Carrier bookings remain largely suspended. Citi evacuated Dubai finance-centre office; PwC closed ME offices." },
-  { country: "UAE", port: "Khalifa Port (Abu Dhabi)", status: "OPERATIONAL", note: "Operational but cut off by Hormuz closure. Mayuree Naree departed here before being attacked in Hormuz." },
-  { country: "UAE", port: "Fujairah / Khor Fakkan", status: "OPERATIONAL", note: "Key alternative hub. GPS spoofing persists offshore. Temp customs facilitation for road transfer to Jebel Ali." },
-  { country: "UAE", port: "Sharjah / Hamriyah", status: "OPERATIONAL", note: "Operations smooth. No alerts." },
-  { country: "Oman", port: "Sohar", status: "OPERATIONAL", note: "Emerging transshipment alternative outside Hormuz." },
-  { country: "Oman", port: "Salalah", status: "SUSPENDED", note: "NEW: Maersk halted operations until further notice. Drone strikes hit fuel storage tanks. Major escalation." },
-  { country: "Oman", port: "Duqm", status: "RESTRICTED", note: "Previously struck by 2 Iranian drones. Fuel tanks damaged. Additional drone strikes reported." },
-  { country: "Saudi Arabia", port: "Ras Tanura", status: "RESTRICTED", note: "Under heightened alert. Saudi intercepted 6 ballistic missiles at Prince Sultan Air Base Mar 11." },
-  { country: "Saudi Arabia", port: "Jeddah (Islamic Port)", status: "OPERATIONAL", note: "Red Sea side — outside Hormuz. Houthi threat persists." },
-  { country: "Saudi Arabia", port: "King Abdullah / Yanbu", status: "OPERATIONAL", note: "Red Sea coast. Accepting diverted bookings." },
-  { country: "Saudi Arabia", port: "Dammam", status: "OPERATIONAL", note: "Gulf-side. Trapped behind Hormuz. LSCI 95." },
-  { country: "Qatar", port: "Hamad Port", status: "RESTRICTED", note: "Qatari military intercepted missile attack Mar 11. Ukrainian anti-drone teams now operating in-country." },
-  { country: "Bahrain", port: "KBSP / Bahrain Steel", status: "SUSPENDED", note: "Not operating. Dozens wounded in Sitra including children. Fire at Ma'ameer facility after drone strike." },
-  { country: "Kuwait", port: "Shuwaikh / Shuaiba", status: "OPERATIONAL", note: "Security Level 2. National Guard downed 8 drones Mar 11. Drone hit residential building, 2 injured." },
-  { country: "Iraq", port: "Umm Qasr / Khor Al Zubair", status: "RESTRICTED", note: "NEW: 2 oil tankers attacked by Iranian drone boat off Port of Basra Mar 11, set ablaze, 1 crew killed." },
-  { country: "Jordan", port: "Aqaba", status: "OPERATIONAL", note: "All operations normal. ISPS Level 1. Jordan stable." },
-  { country: "Egypt", port: "Suez Canal / Port Said", status: "OPERATIONAL", note: "Canal operational at ISPS Level 1. Carrier self-diversion means minimal traffic." },
-];
-
-const airspaceData = [
-  { country: "Iran (OIIX)", status: "CLOSED", note: "Closed. Limited CAA exceptions. Mehrabad Airport bombed overnight Mar 11." },
-  { country: "Iraq (ORBB)", status: "CLOSED", note: "Total closure. Extended to Mar 13+. Islamic Resistance in Iraq claimed Erbil explosions." },
-  { country: "Bahrain (OBBB)", status: "CLOSED", note: "Total closure. Ongoing Iranian strikes on Manama and Sitra areas." },
-  { country: "Kuwait (OKAC)", status: "CLOSED", note: "Total closure. Airport T1 damaged. 8 drones downed Mar 11. Drone hit residential building." },
-  { country: "Syria (OSTT)", status: "CLOSED", note: "Total closure. Israel launched large-scale strikes on Beirut suburbs." },
-  { country: "Israel (LLLL)", status: "LIMITED", note: "PPR only. Iran's 'most intense operation' of war — advanced ballistic missiles at Tel Aviv & Haifa." },
-  { country: "UAE (OMAE)", status: "LIMITED", note: "ESCAT active. DXB: 2 drones hit near airport Mar 11, 4 injured, but flights continued. Emirates serving 84 destinations." },
-  { country: "Qatar (OTDF)", status: "LIMITED", note: "ESCAT active. Missile attack intercepted Mar 11. Limited flights continuing." },
-  { country: "Saudi Arabia (OEJD)", status: "PARTIAL", note: "Intercepted 6 ballistic missiles at Prince Sultan Air Base + eastern drones Mar 11." },
-  { country: "Oman (OOMM)", status: "OPERATIONAL", note: "Airspace open. Key remaining open corridor. But Salalah port now suspended." },
-  { country: "Jordan (OJAC)", status: "PARTIAL", note: "Open with night closure 18:00-09:00. Extra fuel required." },
-];
-
-const roadData = [
-  { route: "UAE Internal", status: "OPERATIONAL", note: "Domestic road freight uninterrupted. Enhanced security. Major firms evacuating offices (Citi, PwC)." },
-  { route: "UAE–Oman (Fujairah → Jebel Ali)", status: "OPERATIONAL", note: "CRITICAL CORRIDOR. Temp customs facilitation. Al Rawdah crossing available." },
-  { route: "Saudi Arabia–UAE", status: "OPERATIONAL", note: "Border crossings functioning. Security delays." },
-  { route: "Saudi Arabia–Jordan", status: "OPERATIONAL", note: "Jordan stable. Aqaba operational." },
-  { route: "Kuwait–Saudi Arabia", status: "OPERATIONAL", note: "Land border for citizen repatriation. Drone threats increasing on Kuwait soil." },
-  { route: "Iraq–Kuwait / Turkey", status: "LIMITED", note: "Basra tankers attacked Mar 11. Security elevated. Islamic Resistance active in Erbil." },
-  { route: "Oman Internal (Sohar–Salalah)", status: "RESTRICTED", note: "NEW: Salalah port suspended by Maersk. Drone strikes on Salalah fuel tanks. Sohar still operational." },
-];
-
-const carrierData = [
-  { name: "Maersk", action: "Hormuz & Red Sea suspended. NEW: Halted operations at Port of Salalah, Oman until further notice — eliminates key alternative outside Hormuz." },
-  { name: "MSC", action: "ALL bookings worldwide to/from ME suspended. 15 vessels (109K TEU) trapped. No change." },
-  { name: "CMA CGM", action: "Vessels sheltering. ECS: $2K-$4K. 14 vessels (70K TEU) trapped. No change." },
-  { name: "Hapag-Lloyd", action: "All Hormuz crossings suspended. WRS $1,500/TEU. No change." },
-  { name: "ONE", action: "Container vessel ONE Majesty (Japan-flagged) sustained stern damage while anchored 52nm from Hormuz Mar 11." },
-];
-
-const kpis = [
-  { label: "Strait of Hormuz", value: "CLOSED", sub: "Day 11 · 14+ vessels attacked since Feb 28 · 3 ships hit Mar 11 · Mine threat active", color: "#DC2626", accent: "#FEF2F2" },
-  { label: "Red Sea / Bab el-Mandeb", value: "HIGH THREAT", sub: "Houthis poised to resume · All carriers on Cape routing · No confirmed strikes yet", color: "#D97706", accent: "#FFFBEB" },
-  { label: "Brent Crude", value: "$91.98/bbl", sub: "Closed ↑4.76% Mar 11 · IEA 400M bbl emergency release · Still ~20% above pre-war", color: "#D97706", accent: "#FFFBEB" },
-  { label: "Airspace Closures", value: "6 NATIONS", sub: "Iran · Iraq · Bahrain · Kuwait · Syria · Israel(PPR) · UAE/Qatar limited", color: "#DC2626", accent: "#FEF2F2" },
-  { label: "Flights: DXB Update", value: "84 ROUTES", sub: "Emirates progressively restoring · 2 drones near DXB Mar 11 · 4 injured · Flights continued", color: "#D97706", accent: "#FFFBEB" },
-  { label: "Vessels Attacked", value: "14+", sub: "Since Feb 28 · 3 ships + 2 tankers hit Mar 11 · Mayuree Naree ablaze · 3 crew missing", color: "#DC2626", accent: "#FEF2F2" },
-  { label: "IEA Emergency Release", value: "400M bbl", sub: "Largest ever · US: 172M from SPR · Germany, Austria, Japan also releasing", color: "#D97706", accent: "#FFFBEB" },
-  { label: "Road Freight (GCC)", value: "OPERATIONAL", sub: "Most resilient mode · But Salalah port now suspended · Oman corridor degraded", color: "#16A34A", accent: "#F0FDF4" },
-];
-
+// ============ MAIN DASHBOARD ============
 export default function Dashboard() {
+  const [data, setData] = useState(INIT);
   const [activeTab, setActiveTab] = useState("overview");
   const [time, setTime] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [aiUpdate, setAiUpdate] = useState(null);
+  const [lastAiRefresh, setLastAiRefresh] = useState(null);
+  const [refreshError, setRefreshError] = useState(null);
+  const [autoEnabled, setAutoEnabled] = useState(true);
+  const [nextRefresh, setNextRefresh] = useState(null);
+  const timerRef = useRef(null);
 
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
-  const handleRefresh = () => { setRefreshing(true); setTimeout(() => setRefreshing(false), 1500); };
+
+  const doAiRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages: [{ role: "user", content: REFRESH_PROMPT }],
+        }),
+      });
+      const d = await res.json();
+      const textBlocks = d.content?.filter(i => i.type === "text").map(i => i.text).join("\n") || "";
+      const clean = textBlocks.replace(/```json|```/g, "").trim();
+      try {
+        const parsed = JSON.parse(clean);
+        setAiUpdate(parsed);
+        setLastAiRefresh(new Date());
+      } catch {
+        setAiUpdate({ summary: textBlocks.slice(0, 500), raw: true });
+        setLastAiRefresh(new Date());
+      }
+    } catch (e) {
+      setRefreshError(`Refresh failed: ${e.message}`);
+    }
+    setRefreshing(false);
+  }, []);
+
+  // Auto-refresh every 2 hours
+  useEffect(() => {
+    if (!autoEnabled) { if (timerRef.current) clearInterval(timerRef.current); return; }
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+    setNextRefresh(new Date(Date.now() + TWO_HOURS));
+    timerRef.current = setInterval(() => {
+      doAiRefresh();
+      setNextRefresh(new Date(Date.now() + TWO_HOURS));
+    }, TWO_HOURS);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [autoEnabled, doAiRefresh]);
 
   const tabs = [
     { id: "overview", icon: "◉", label: "Overview" },
-    { id: "maritime", icon: "⚓", label: "Maritime & Ports" },
+    { id: "maritime", icon: "⚓", label: "Ocean & Ports" },
     { id: "air", icon: "✈", label: "Air Freight" },
     { id: "road", icon: "🛣", label: "Road Transport" },
     { id: "carriers", icon: "📦", label: "Carriers" },
   ];
 
+  const countdown = nextRefresh ? Math.max(0, Math.floor((nextRefresh - time) / 60000)) : null;
+
   return (
     <div style={{ minHeight: "100vh", background: "#F8FAFC", color: "#1E293B", fontFamily: "'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
-        @keyframes pulse { 0%,100%{transform:scale(1);opacity:0.25} 50%{transform:scale(2.2);opacity:0} }
-        @keyframes slideUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        .card { background:#FFF; border:1px solid #E2E8F0; border-radius:10px; box-shadow:0 1px 3px rgba(15,23,42,0.04); transition:box-shadow 0.2s,border-color 0.2s; }
-        .card:hover { box-shadow:0 4px 12px rgba(15,23,42,0.06); border-color:#CBD5E1; }
-        .tab-btn { padding:8px 18px; border:1px solid #E2E8F0; border-radius:8px; background:#FFF; color:#64748B; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:600; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
-        .tab-btn:hover { color:#334155; background:#F1F5F9; border-color:#CBD5E1; }
-        .tab-btn.active { background:#0F172A; color:#FFF; border-color:#0F172A; box-shadow:0 2px 8px rgba(15,23,42,0.2); }
-        .refresh-btn { padding:8px 20px; border:1px solid #E2E8F0; border-radius:8px; background:#FFF; color:#0F172A; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:600; transition:all 0.2s; display:flex; align-items:center; gap:7px; }
-        .refresh-btn:hover { background:#F1F5F9; border-color:#94A3B8; }
-        .tbl-header { display:grid; padding:10px 16px; background:#F8FAFC; border-bottom:2px solid #E2E8F0; font-size:10px; font-weight:700; letter-spacing:0.08em; color:#64748B; text-transform:uppercase; position:sticky; top:0; z-index:2; }
-        .tbl-row { display:grid; padding:12px 16px; border-bottom:1px solid #F1F5F9; align-items:center; transition:background 0.15s; }
-        .tbl-row:hover { background:#F8FAFC; }
-        .tbl-row:last-child { border-bottom:none; }
-        ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:#F8FAFC; } ::-webkit-scrollbar-thumb { background:#CBD5E1; border-radius:4px; }
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap%27);
+        @keyframes pulse{0%,100%{transform:scale(1);opacity:.25}50%{transform:scale(2.2);opacity:0}}
+        @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+        .card{background:#FFF;border:1px solid #E2E8F0;border-radius:10px;box-shadow:0 1px 3px rgba(15,23,42,.04);transition:box-shadow .2s,border-color .2s}
+        .card:hover{box-shadow:0 4px 12px rgba(15,23,42,.06);border-color:#CBD5E1}
+        .tab-btn{padding:8px 16px;border:1px solid #E2E8F0;border-radius:8px;background:#FFF;color:#64748B;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;transition:all .2s;display:flex;align-items:center;gap:5px}
+        .tab-btn:hover{color:#334155;background:#F1F5F9;border-color:#CBD5E1}
+        .tab-btn.active{background:#0F172A;color:#FFF;border-color:#0F172A;box-shadow:0 2px 8px rgba(15,23,42,.2)}
+        .refresh-btn{padding:7px 16px;border:1px solid #E2E8F0;border-radius:8px;background:#FFF;color:#0F172A;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;transition:all .2s;display:flex;align-items:center;gap:6px}
+        .refresh-btn:hover{background:#F1F5F9;border-color:#94A3B8}
+        .tbl-header{display:grid;padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #E2E8F0;font-size:10px;font-weight:700;letter-spacing:.08em;color:#64748B;text-transform:uppercase;position:sticky;top:0;z-index:2}
+        .tbl-row{display:grid;padding:11px 14px;border-bottom:1px solid #F1F5F9;align-items:center;transition:background .15s}
+        .tbl-row:hover{background:#F8FAFC}
+        .tbl-row:last-child{border-bottom:none}
+        ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#F8FAFC}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}
       `}</style>
 
       {/* HEADER */}
-      <div style={{ background: "#FFF", borderBottom: "1px solid #E2E8F0", padding: "14px 24px", position: "sticky", top: 0, zIndex: 10, boxShadow: "0 1px 4px rgba(15,23,42,0.03)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ background: "#FFF", borderBottom: "1px solid #E2E8F0", padding: "12px 20px", position: "sticky", top: 0, zIndex: 10, boxShadow: "0 1px 4px rgba(15,23,42,.03)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 3 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "#DC2626", textTransform: "uppercase", display: "flex", alignItems: "center" }}>
-                <PulseDot color="#DC2626" /> ACTIVE CONFLICT — DAY {DAY_NUMBER}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+              <span style={{ position: "relative", display: "inline-block", width: 8, height: 8, marginRight: 2 }}>
+                <span style={{ position: "absolute", inset: -3, borderRadius: "50%", background: "#DC2626", opacity: .25, animation: "pulse 2s ease-in-out infinite" }} />
+                <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#DC2626" }} />
               </span>
-              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA", letterSpacing: "0.06em" }}>CRITICAL — ESCALATING</span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", color: "#DC2626", textTransform: "uppercase" }}>ACTIVE CONFLICT — DAY {data.dayNumber}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA", letterSpacing: ".06em" }}>CRITICAL — ESCALATING</span>
             </div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#0F172A" }}>Middle East Logistics Status Report</h1>
-            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2, fontFamily: "'IBM Plex Mono', monospace" }}>
-              {REPORT_DATE} · Operation Epic Fury · Iran's "Most Intense Operation" of War · Salalah Port Suspended
+            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-.02em", color: "#0F172A" }}>Middle East Logistics Status Report</h1>
+            <div style={{ fontSize: 11.5, color: "#64748B", marginTop: 1, fontFamily: "'IBM Plex Mono', monospace" }}>
+              {data.reportDate} · Hormuz Closed · Iraq Ports Halted · Salalah Suspended · Oil &gt;$100
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#0F172A", fontSize: 15, fontWeight: 600 }}>{time.toLocaleTimeString("en-US", { hour12: false })} <span style={{ fontSize: 10, color: "#94A3B8" }}>UTC</span></div>
-              <div style={{ fontSize: 11, color: "#94A3B8" }}>Updated: {REPORT_DATE}</div>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#0F172A", fontSize: 14, fontWeight: 600 }}>{time.toLocaleTimeString("en-US", { hour12: false })} <span style={{ fontSize: 10, color: "#94A3B8" }}>UTC</span></div>
+              {lastAiRefresh && <div style={{ fontSize: 10, color: "#16A34A" }}>AI refreshed: {lastAiRefresh.toLocaleTimeString()}</div>}
+              {countdown !== null && autoEnabled && <div style={{ fontSize: 10, color: "#64748B" }}>Next auto-refresh: {countdown}m</div>}
             </div>
-            <button className="refresh-btn" onClick={handleRefresh}>
-              <span style={{ display: "inline-block", fontSize: 15, transition: "transform 0.6s", transform: refreshing ? "rotate(360deg)" : "none" }}>↻</span>
-              {refreshing ? "Refreshing…" : "Refresh Data"}
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <button className="refresh-btn" onClick={doAiRefresh} disabled={refreshing}>
+                <span style={{ display: "inline-block", fontSize: 14, animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
+                {refreshing ? "AI Searching…" : "AI Refresh Now"}
+              </button>
+              <button onClick={() => setAutoEnabled(!autoEnabled)} style={{ padding: "3px 10px", border: "1px solid #E2E8F0", borderRadius: 6, background: autoEnabled ? "#F0FDF4" : "#FEF2F2", color: autoEnabled ? "#166534" : "#991B1B", cursor: "pointer", fontSize: 10, fontWeight: 600, fontFamily: "inherit" }}>
+                {autoEnabled ? "⏱ Auto-refresh ON (2hr)" : "⏸ Auto-refresh OFF"}
+              </button>
+            </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 14, flexWrap: "wrap" }}>
-          {tabs.map(t => (<button key={t.id} className={`tab-btn ${activeTab === t.id ? "active" : ""}`} onClick={() => setActiveTab(t.id)}><span style={{ fontSize: 13 }}>{t.icon}</span> {t.label}</button>))}
+        <div style={{ display: "flex", gap: 5, marginTop: 12, flexWrap: "wrap" }}>
+          {tabs.map(t => (<button key={t.id} className={`tab-btn ${activeTab === t.id ? "active" : ""}`} onClick={() => setActiveTab(t.id)}><span style={{ fontSize: 12 }}>{t.icon}</span> {t.label}</button>))}
         </div>
       </div>
 
-      <div style={{ padding: "20px 24px", maxWidth: 1400, margin: "0 auto" }}>
-
-        {/* ===== WHAT'S NEW BANNER ===== */}
-        {activeTab === "overview" && (
-          <div style={{ animation: "slideUp 0.35s ease" }}>
-            <div style={{ padding: "12px 16px", marginBottom: 16, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, borderLeft: "4px solid #2563EB" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "#1E40AF", textTransform: "uppercase", marginBottom: 6 }}>⚡ Key Changes Since March 11</div>
-              <div style={{ fontSize: 12.5, color: "#1E3A5F", lineHeight: 1.65 }}>
-                <strong>ESCALATION:</strong> Iran launched its "most intense operation" of the war — advanced ballistic missiles at Tel Aviv/Haifa. 3 more ships attacked in Hormuz (total 14+). 2 oil tankers attacked off Basra by drone boat. Maersk <strong>halted Salalah port operations</strong> (Oman) — eliminating a key alternative outside Hormuz. Iran threatens to target banks & financial institutions across ME. IEA announced <strong>largest-ever emergency oil release</strong> (400M bbl). US SPR contributing 172M bbl. Brent closed $91.98 (+4.76%). Citi evacuated Dubai office, PwC closed ME offices. UN Security Council passed resolution (135 co-sponsors) demanding Iran stop attacks. CENTCOM warns civilian ports used militarily lose protected status. Iran warns all regional ports could become targets.
-              </div>
+      <div style={{ padding: "16px 20px", maxWidth: 1400, margin: "0 auto" }}>
+        {/* AI UPDATE BANNER */}
+        {aiUpdate && (
+          <div style={{ padding: "12px 16px", marginBottom: 14, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, borderLeft: "4px solid #2563EB", animation: "slideUp .3s ease" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: "#1E40AF", textTransform: "uppercase" }}>🤖 AI Live Intelligence Update — {lastAiRefresh?.toLocaleTimeString()}</span>
+              <button onClick={() => setAiUpdate(null)} style={{ background: "none", border: "none", color: "#64748B", cursor: "pointer", fontSize: 14 }}>✕</button>
             </div>
+            <div style={{ fontSize: 12.5, color: "#1E3A5F", lineHeight: 1.65 }}>
+              {aiUpdate.raw ? aiUpdate.summary : (<>
+                <strong>{aiUpdate.summary || "Searching trusted sources..."}</strong>
+                {aiUpdate.newDevelopments?.length > 0 && (
+                  <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                    {aiUpdate.newDevelopments.map((d, i) => <li key={i} style={{ marginBottom: 3 }}>{d}</li>)}
+                  </ul>
+                )}
+                {aiUpdate.oilPrice && <div style={{ marginTop: 6 }}><strong>Oil:</strong> {aiUpdate.oilPrice} | <strong>Hormuz:</strong> {aiUpdate.hormuzStatus} | <strong>Vessels attacked:</strong> {aiUpdate.vesselCount}</div>}
+              </>)}
+            </div>
+            <div style={{ fontSize: 10, color: "#6B7280", marginTop: 6 }}>Sources: CNN · NBC · NPR · Al Jazeera · CNBC · Bloomberg · Reuters · GAC · Inchcape · Windward AI · IEA · EASA · UKMTO</div>
+          </div>
+        )}
+        {refreshError && <div style={{ padding: "8px 14px", marginBottom: 14, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, fontSize: 12, color: "#991B1B" }}>{refreshError}</div>}
 
-            {/* KPI CARDS */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, marginBottom: 24 }}>
-              {kpis.map((k, i) => (
-                <div key={i} className="card" style={{ padding: "16px 18px", position: "relative", overflow: "hidden", background: k.accent }}>
+        {/* OVERVIEW TAB */}
+        {activeTab === "overview" && (
+          <div style={{ animation: "slideUp .35s ease" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))", gap: 10, marginBottom: 20 }}>
+              {data.kpis.map((k, i) => (
+                <div key={i} className="card" style={{ padding: "14px 16px", position: "relative", overflow: "hidden", background: k.accent }}>
                   <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 3, background: k.color }} />
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "#94A3B8", textTransform: "uppercase", marginBottom: 8, marginTop: 4 }}>{k.label}</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: k.color, marginBottom: 4, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.1 }}>{k.value}</div>
-                  <div style={{ fontSize: 11.5, color: "#64748B", lineHeight: 1.4 }}>{k.sub}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".07em", color: "#94A3B8", textTransform: "uppercase", marginBottom: 6, marginTop: 3 }}>{k.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: k.color, marginBottom: 3, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.1 }}>{k.value}</div>
+                  <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.4 }}>{k.sub}</div>
                 </div>
               ))}
             </div>
-
-            {/* SITUATION SUMMARY */}
-            <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-              <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 20, height: 20, borderRadius: 5, background: "#0F172A", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11 }}>i</span>
-                Situation Summary — Day 13
-              </h3>
-              <div style={{ display: "grid", gap: 10, fontSize: 13, lineHeight: 1.65, color: "#334155" }}>
-                {[
-                  {
-                    border: "#DC2626", bg: "#FEF2F2", label: "MARITIME", labelColor: "#991B1B",
-                    text: "Hormuz CLOSED Day 11. Major escalation: 3 ships attacked Mar 11 (Mayuree Naree ablaze, 3 crew missing; ONE Majesty stern damage; Star Gwyneth hull damage NW of Dubai). 2 oil tankers attacked off Basra by Iranian drone boat, 1 crew killed. Total 14+ vessels hit since Feb 28. IRGC demands approval for ANY Hormuz transit. US destroyed 16 minelayers. Iran mine threat active. CRITICAL: Maersk suspended Salalah port (Oman) — eliminates key alternative outside Hormuz. Iran restarted crude exports via Jask terminal (Gulf of Oman) to China. 7 'dark' ships transited since Mar 8 (5 Iran-linked). Shadow fleet activity intensifying."
-                  },
-                  {
-                    border: "#D97706", bg: "#FFFBEB", label: "AIR FREIGHT", labelColor: "#92400E",
-                    text: "Iran, Iraq, Bahrain, Kuwait, Syria fully closed. Israel PPR only. UAE/Qatar limited under ESCAT. DXB: 2 drones hit near airport Mar 11 — 4 people injured but flights continued. Emirates now serving 84 destinations, progressively restoring. Iran launched 'most intense operation' of war with advanced ballistic missiles at Tel Aviv/Haifa. Saudi intercepted 6 ballistic missiles at Prince Sultan Air Base. Kuwait National Guard downed 8 drones."
-                  },
-                  {
-                    border: "#16A34A", bg: "#F0FDF4", label: "ROAD FREIGHT", labelColor: "#166534",
-                    text: "Still the most resilient mode but Oman corridor degrading. Fujairah/Khor Fakkan → Jebel Ali remains critical. However, Salalah port suspension and drone strikes on Duqm/Salalah fuel tanks reduce Oman's viability as transshipment alternative. Corporate evacuations (Citi, PwC) signal business continuity pressure."
-                  },
-                  {
-                    border: "#7C3AED", bg: "#F5F3FF", label: "ENERGY & MARKETS", labelColor: "#5B21B6",
-                    text: "Brent closed $91.98/bbl (+4.76% Mar 11). Still ~20% above pre-war. IEA announced largest-ever emergency release: 400M bbl from member reserves (US: 172M from SPR; Germany, Austria, Japan also releasing). Failed to drive prices down — analysts warn >$100 if war extends past this week. Iran threatens banks/financial institutions as new target category. UN Security Council resolution (135 co-sponsors) demands Iran stop attacks on neighbours."
-                  },
-                ].map((s, i) => (
-                  <div key={i} style={{ padding: "12px 16px", background: s.bg, borderRadius: 8, borderLeft: `4px solid ${s.border}` }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: s.labelColor, textTransform: "uppercase", marginRight: 8 }}>{s.label}:</span>
+            <div className="card" style={{ padding: 18, marginBottom: 18 }}>
+              <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Situation Summary — Day {data.dayNumber}</h3>
+              <div style={{ display: "grid", gap: 8, fontSize: 12.5, lineHeight: 1.6, color: "#334155" }}>
+                {data.situationBlocks.map((s, i) => (
+                  <div key={i} style={{ padding: "10px 14px", background: s.bg, borderRadius: 8, borderLeft: `4px solid ${s.border}` }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".06em", color: s.labelColor, textTransform: "uppercase", marginRight: 6 }}>{s.label}:</span>
                     <span style={{ color: "#475569" }}>{s.text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* SURCHARGES */}
-            <div className="card" style={{ padding: 20 }}>
-              <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Emergency Surcharges & Market Actions</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 10 }}>
-                {[
-                  { carrier: "CMA CGM", charge: "$2K–$4K/box", type: "Emergency Conflict Surcharge" },
-                  { carrier: "Hapag-Lloyd", charge: "$1,500/TEU", type: "War Risk Surcharge" },
-                  { carrier: "Maersk", charge: "EFI + Salalah halt", type: "Emergency Freight + Port Suspension" },
-                  { carrier: "IEA Members", charge: "400M bbl release", type: "Largest-ever emergency reserve" },
-                  { carrier: "US DOE", charge: "172M bbl SPR", type: "Strategic Petroleum Reserve tap" },
-                ].map((s, i) => (
-                  <div key={i} style={{ padding: "12px 14px", background: "#FFFBEB", borderRadius: 8, border: "1px solid #FDE68A" }}>
-                    <div style={{ fontWeight: 700, color: "#0F172A", fontSize: 12.5, marginBottom: 3 }}>{s.carrier}</div>
-                    <div style={{ color: "#B45309", fontWeight: 700, fontSize: 17, fontFamily: "'IBM Plex Mono', monospace" }}>{s.charge}</div>
-                    <div style={{ color: "#92400E", fontSize: 10.5, marginTop: 2 }}>{s.type}</div>
                   </div>
                 ))}
               </div>
@@ -240,37 +272,32 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* MARITIME */}
+        {/* MARITIME TAB */}
         {activeTab === "maritime" && (
-          <div style={{ animation: "slideUp 0.35s ease" }}>
-            <div style={{ padding: "12px 16px", marginBottom: 16, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, borderLeft: "4px solid #DC2626" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#991B1B", marginBottom: 4 }}>⚠ ESCALATION ALERT — March 11-12</div>
-              <div style={{ fontSize: 12, color: "#7F1D1D", lineHeight: 1.6 }}>
-                3 ships attacked near Hormuz Mar 11 (Mayuree Naree ablaze/3 missing, ONE Majesty, Star Gwyneth). 2 oil tankers attacked off Basra by drone boat. Maersk halted Salalah port. IRGC demands transit approval for all ships. Iran warns all regional ports are legitimate targets if Iranian ports are threatened. CENTCOM warns civilian ports used militarily lose protected status. Total vessels attacked: 14+ since Feb 28.
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, marginBottom: 20 }}>
+          <div style={{ animation: "slideUp .35s ease" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10, marginBottom: 16 }}>
               {[
-                { label: "Hormuz Pre-Conflict", val: "153", unit: "transits/day", color: "#94A3B8", bg: "#F8FAFC" },
-                { label: "Hormuz Current", val: "~0", unit: "(7 dark ships since Mar 8)", color: "#DC2626", bg: "#FEF2F2" },
-                { label: "Vessels Attacked", val: "14+", unit: "since Feb 28", color: "#DC2626", bg: "#FEF2F2" },
-                { label: "Minelayers Destroyed", val: "16", unit: "by US forces Mar 10", color: "#D97706", bg: "#FFFBEB" },
+                { label: "Vessels Attacked", val: "16+", unit: "since Feb 28 (NYT)", color: "#DC2626", bg: "#FEF2F2" },
+                { label: "Seafarers Killed", val: "8", unit: "1 missing", color: "#DC2626", bg: "#FEF2F2" },
+                { label: "Hormuz Transit", val: "~0", unit: "only dark/shadow ships", color: "#DC2626", bg: "#FEF2F2" },
+                { label: "IEA Supply Loss", val: "8M bbl/d", unit: "largest disruption ever", color: "#DC2626", bg: "#FEF2F2" },
+                { label: "Omani Crude", val: "$132/bbl", unit: "well above Brent", color: "#D97706", bg: "#FFFBEB" },
               ].map((s, i) => (
-                <div key={i} className="card" style={{ padding: 16, textAlign: "center", background: s.bg }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "#64748B", textTransform: "uppercase", marginBottom: 8 }}>{s.label}</div>
-                  <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: s.color, lineHeight: 1 }}>{s.val}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>{s.unit}</div>
+                <div key={i} className="card" style={{ padding: 14, textAlign: "center", background: s.bg }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".07em", color: "#64748B", textTransform: "uppercase", marginBottom: 6 }}>{s.label}</div>
+                  <div style={{ fontSize: 26, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: s.color, lineHeight: 1 }}>{s.val}</div>
+                  <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }}>{s.unit}</div>
                 </div>
               ))}
             </div>
             <div className="card">
-              <div className="tbl-header" style={{ gridTemplateColumns: "90px 170px 115px 1fr" }}><span>Country</span><span>Port / Terminal</span><span>Status</span><span>Notes</span></div>
-              <div style={{ maxHeight: 560, overflow: "auto" }}>
-                {maritimePorts.map((p, i) => (
-                  <div key={i} className="tbl-row" style={{ gridTemplateColumns: "90px 170px 115px 1fr", fontSize: 12.5, background: p.note.includes("NEW:") ? "#FFFBEB" : undefined }}>
+              <div className="tbl-header" style={{ gridTemplateColumns: "80px 155px 105px 1fr" }}><span>Country</span><span>Port</span><span>Status</span><span>Notes</span></div>
+              <div style={{ maxHeight: 520, overflow: "auto" }}>
+                {data.ports.map((p, i) => (
+                  <div key={i} className="tbl-row" style={{ gridTemplateColumns: "80px 155px 105px 1fr", fontSize: 12, background: ["SUSPENDED", "HALTED"].includes(p.status) ? "#FEF2F2" : undefined }}>
                     <span style={{ fontWeight: 600, color: "#64748B" }}>{p.country}</span>
                     <span style={{ color: "#0F172A", fontWeight: 600 }}>{p.port}</span>
-                    <span><StatusBadge status={p.status} /></span>
+                    <span><Badge status={p.status} /></span>
                     <span style={{ color: "#64748B", lineHeight: 1.5 }}>{p.note}</span>
                   </div>
                 ))}
@@ -279,60 +306,39 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* AIR */}
+        {/* AIR TAB */}
         {activeTab === "air" && (
-          <div style={{ animation: "slideUp 0.35s ease" }}>
-            <div style={{ padding: "12px 16px", marginBottom: 16, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, borderLeft: "4px solid #D97706" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E", marginBottom: 4 }}>DXB UPDATE — March 11-12</div>
-              <div style={{ fontSize: 12, color: "#78350F", lineHeight: 1.6 }}>
-                2 Iranian drones hit near Dubai International Airport on Mar 11 — 4 people injured (3 minor, 1 moderate). Air traffic continued operating. Emirates now serving 84 destinations, progressively restoring full schedule. However, Iran's joint military command announced banks and financial institutions are now targets — threatening Dubai's financial centre.
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, marginBottom: 20 }}>
-              {[
-                { label: "Brent Close Mar 11", val: "$91.98", delta: "↑ 4.76%", bg: "#FFFBEB" },
-                { label: "IEA Reserve Release", val: "400M bbl", delta: "Largest ever", bg: "#EFF6FF" },
-                { label: "US SPR Release", val: "172M bbl", delta: "Starting next week", bg: "#EFF6FF" },
-                { label: "Emirates Routes", val: "84", delta: "Progressively restoring", bg: "#F0FDF4" },
-                { label: "DXB Drone Incidents", val: "2", delta: "4 injured · Flights OK", bg: "#FFFBEB" },
-              ].map((m, i) => (
-                <div key={i} className="card" style={{ padding: 14, textAlign: "center", background: m.bg }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "#64748B", textTransform: "uppercase", marginBottom: 6 }}>{m.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: "#0F172A" }}>{m.val}</div>
-                  <div style={{ fontSize: 11, color: "#D97706", fontWeight: 600, marginTop: 2 }}>{m.delta}</div>
-                </div>
-              ))}
-            </div>
-            <div className="card" style={{ marginBottom: 20 }}>
-              <div className="tbl-header" style={{ gridTemplateColumns: "170px 115px 1fr" }}><span>Country / FIR</span><span>Airspace</span><span>Details</span></div>
-              <div style={{ maxHeight: 440, overflow: "auto" }}>
-                {airspaceData.map((a, i) => (
-                  <div key={i} className="tbl-row" style={{ gridTemplateColumns: "170px 115px 1fr", fontSize: 12.5 }}>
+          <div style={{ animation: "slideUp .35s ease" }}>
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="tbl-header" style={{ gridTemplateColumns: "160px 105px 1fr" }}><span>Country / FIR</span><span>Airspace</span><span>Details</span></div>
+              <div style={{ maxHeight: 420, overflow: "auto" }}>
+                {data.airspace.map((a, i) => (
+                  <div key={i} className="tbl-row" style={{ gridTemplateColumns: "160px 105px 1fr", fontSize: 12 }}>
                     <span style={{ color: "#0F172A", fontWeight: 600 }}>{a.country}</span>
-                    <span><StatusBadge status={a.status} /></span>
+                    <span><Badge status={a.status} /></span>
                     <span style={{ color: "#64748B", lineHeight: 1.5 }}>{a.note}</span>
                   </div>
                 ))}
               </div>
             </div>
+            <div style={{ padding: "12px 16px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, borderLeft: "4px solid #D97706", fontSize: 12.5, color: "#78350F", lineHeight: 1.6 }}>
+              <strong>Qatar Airways Mar 13:</strong> 15 destinations — Cairo, Casablanca, Johannesburg, São Paulo, New York, Frankfurt, Madrid, London, Beijing, Mumbai, Delhi, Islamabad, Colombo, Jakarta, Manila. Scheduled ops still suspended. Bookings Feb 28–Mar 22 eligible for 2 free changes or refund.
+            </div>
           </div>
         )}
 
-        {/* ROAD */}
+        {/* ROAD TAB */}
         {activeTab === "road" && (
-          <div style={{ animation: "slideUp 0.35s ease" }}>
-            <div style={{ padding: "14px 18px", marginBottom: 20, background: "#FFFBEB", borderLeft: "4px solid #D97706", border: "1px solid #FDE68A", borderRadius: 10 }}>
-              <div style={{ fontSize: 13.5, color: "#92400E", fontWeight: 600, marginBottom: 4 }}>Road freight remains the most resilient mode — but Oman corridor is degrading.</div>
-              <div style={{ fontSize: 12.5, color: "#475569", lineHeight: 1.65 }}>
-                Maersk's suspension of Salalah port and drone strikes on Duqm/Salalah fuel tanks reduce Oman's viability as a bypass hub. Fujairah/Khor Fakkan → Jebel Ali remains the critical workaround. Major corporations (Citi, PwC) evacuating Gulf offices signals growing business continuity risk. Iran's new threat to target banks and financial institutions adds pressure.
-              </div>
+          <div style={{ animation: "slideUp .35s ease" }}>
+            <div style={{ padding: "12px 16px", marginBottom: 14, background: "#FFFBEB", borderLeft: "4px solid #D97706", border: "1px solid #FDE68A", borderRadius: 10, fontSize: 12.5, color: "#92400E", lineHeight: 1.6 }}>
+              <strong>Road freight is degrading.</strong> Fujairah/Khor Fakkan → Jebel Ali is now the LAST MAJOR functioning alternative corridor. Kuwait infrastructure under pressure (6 power lines lost). Oman corridor severely compromised (Salalah suspended, Mina Al Fahal evacuation).
             </div>
             <div className="card">
-              <div className="tbl-header" style={{ gridTemplateColumns: "230px 115px 1fr" }}><span>Route / Corridor</span><span>Status</span><span>Details</span></div>
-              {roadData.map((r, i) => (
-                <div key={i} className="tbl-row" style={{ gridTemplateColumns: "230px 115px 1fr", fontSize: 12.5, background: r.note.includes("NEW:") ? "#FFFBEB" : undefined }}>
+              <div className="tbl-header" style={{ gridTemplateColumns: "210px 105px 1fr" }}><span>Route</span><span>Status</span><span>Details</span></div>
+              {data.roads.map((r, i) => (
+                <div key={i} className="tbl-row" style={{ gridTemplateColumns: "210px 105px 1fr", fontSize: 12 }}>
                   <span style={{ color: "#0F172A", fontWeight: 600 }}>{r.route}</span>
-                  <span><StatusBadge status={r.status} /></span>
+                  <span><Badge status={r.status} /></span>
                   <span style={{ color: "#64748B", lineHeight: 1.5 }}>{r.note}</span>
                 </div>
               ))}
@@ -340,31 +346,29 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* CARRIERS */}
+        {/* CARRIERS TAB */}
         {activeTab === "carriers" && (
-          <div style={{ animation: "slideUp 0.35s ease" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginBottom: 24 }}>
+          <div style={{ animation: "slideUp .35s ease" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 10, marginBottom: 18 }}>
               {[
                 { label: "Vessels Trapped", val: "~140", sub: "in Persian Gulf", color: "#DC2626", bg: "#FEF2F2" },
-                { label: "Vessels Attacked", val: "14+", sub: "since Feb 28", color: "#DC2626", bg: "#FEF2F2" },
                 { label: "Fleet Impacted", val: "10.7%", sub: "of global capacity", color: "#DC2626", bg: "#FEF2F2" },
-                { label: "Transit Extension", val: "+10–15d", sub: "Cape of Good Hope", color: "#D97706", bg: "#FFFBEB" },
-                { label: "Salalah Port", val: "HALTED", sub: "Maersk suspended ops", color: "#DC2626", bg: "#FEF2F2" },
-                { label: "Shanghai→Jebel Ali", val: ">$4K/FEU", sub: "was $1,800 pre-conflict", color: "#DC2626", bg: "#FEF2F2" },
+                { label: "Transit Add", val: "+10–15d", sub: "Cape of Good Hope", color: "#D97706", bg: "#FFFBEB" },
+                { label: "SH→Jebel Ali", val: ">$4K/FEU", sub: "was $1,800 pre-war", color: "#DC2626", bg: "#FEF2F2" },
               ].map((s, i) => (
-                <div key={i} className="card" style={{ padding: 14, textAlign: "center", background: s.bg }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", color: "#64748B", textTransform: "uppercase", marginBottom: 6 }}>{s.label}</div>
-                  <div style={{ fontSize: 26, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: s.color, lineHeight: 1 }}>{s.val}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>{s.sub}</div>
+                <div key={i} className="card" style={{ padding: 12, textAlign: "center", background: s.bg }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".07em", color: "#64748B", textTransform: "uppercase", marginBottom: 5 }}>{s.label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: s.color, lineHeight: 1 }}>{s.val}</div>
+                  <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }}>{s.sub}</div>
                 </div>
               ))}
             </div>
             <div className="card">
-              <div className="tbl-header" style={{ gridTemplateColumns: "120px 1fr" }}><span>Carrier</span><span>Actions & Status</span></div>
-              {carrierData.map((c, i) => (
-                <div key={i} className="tbl-row" style={{ gridTemplateColumns: "120px 1fr", fontSize: 12.5 }}>
+              <div className="tbl-header" style={{ gridTemplateColumns: "110px 1fr" }}><span>Carrier</span><span>Actions & Status</span></div>
+              {data.carriers.map((c, i) => (
+                <div key={i} className="tbl-row" style={{ gridTemplateColumns: "110px 1fr", fontSize: 12 }}>
                   <span style={{ color: "#0F172A", fontWeight: 700 }}>{c.name}</span>
-                  <span style={{ color: "#475569", lineHeight: 1.65 }}>{c.action}</span>
+                  <span style={{ color: "#475569", lineHeight: 1.6 }}>{c.action}</span>
                 </div>
               ))}
             </div>
@@ -372,9 +376,9 @@ export default function Dashboard() {
         )}
 
         {/* FOOTER */}
-        <div style={{ marginTop: 32, padding: "14px 0", borderTop: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, fontSize: 10.5, color: "#94A3B8" }}>
-          <span>Sources: CNN · NBC · NPR · Al Jazeera · CNBC · Windward AI · UKMTO · EIA · IEA · EASA · Flightradar24 · Newsweek · Fast Company · Reuters · AP</span>
-          <span>Confidential · Supply Chain Risk Advisory · Updated {REPORT_DATE}</span>
+        <div style={{ marginTop: 28, padding: "12px 0", borderTop: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6, fontSize: 10, color: "#94A3B8" }}>
+          <span>Sources: CNN · NBC · NPR · Al Jazeera · CNBC · Bloomberg · Argus · The National · GAC · Inchcape · Windward AI · UKMTO · IEA · EIA · EASA · NYT · Qatar Airways · Kpler</span>
+          <span>Auto-refresh: {autoEnabled ? "ON (2hr)" : "OFF"} · Updated {data.reportDate} · Ask Claude for manual refresh</span>
         </div>
       </div>
     </div>
